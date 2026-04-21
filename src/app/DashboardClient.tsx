@@ -119,13 +119,57 @@ function StatCard({
   );
 }
 
-function TrafficChart({ data }: { data: Ga4Daily[] }) {
-  const width = 620;
-  const height = 170;
-  const paddingX = 10;
-  const chartTop = 20;
-  const chartBottom = 150;
+function niceMax(value: number): number {
+  if (value <= 0) return 1;
+  if (value <= 5) return 5;
+  if (value <= 10) return 10;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+  const normalized = value / magnitude;
+  let nice: number;
+  if (normalized <= 1) nice = 1;
+  else if (normalized <= 2) nice = 2;
+  else if (normalized <= 2.5) nice = 2.5;
+  else if (normalized <= 5) nice = 5;
+  else nice = 10;
+  return nice * magnitude;
+}
 
+function formatAxisNumber(value: number): string {
+  if (value >= 1000) {
+    const thousands = value / 1000;
+    const fixed = thousands >= 10 ? thousands.toFixed(0) : thousands.toFixed(1);
+    return `${fixed.replace(/\.0$/, '')}k`;
+  }
+  return Math.round(value).toString();
+}
+
+function formatAxisDate(iso: string): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(`${iso}T00:00:00Z`);
+    return d.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    });
+  } catch {
+    return iso.slice(5);
+  }
+}
+
+function pickXTickIndexes(length: number): number[] {
+  if (length <= 1) return [0];
+  if (length <= 7) return Array.from({ length }, (_, i) => i);
+  const maxTicks = length <= 14 ? Math.min(length, 7) : length <= 35 ? 6 : 7;
+  const step = (length - 1) / (maxTicks - 1);
+  const set = new Set<number>();
+  for (let i = 0; i < maxTicks; i++) set.add(Math.round(i * step));
+  set.add(0);
+  set.add(length - 1);
+  return Array.from(set).sort((a, b) => a - b);
+}
+
+function TrafficChart({ data }: { data: Ga4Daily[] }) {
   if (data.length === 0) {
     return (
       <div
@@ -141,15 +185,21 @@ function TrafficChart({ data }: { data: Ga4Daily[] }) {
     );
   }
 
-  const maxY = Math.max(1, ...data.flatMap((d) => [d.users, d.sessions]));
+  const svgWidth = 1000;
+  const svgHeight = 200;
+  const rawMax = Math.max(...data.flatMap((d) => [d.users, d.sessions]));
+  const maxY = niceMax(rawMax);
+  const tickCount = 4;
+  const yTickValues: number[] = [];
+  for (let i = 0; i <= tickCount; i++) {
+    yTickValues.push((maxY * i) / tickCount);
+  }
+
+  const yAt = (val: number) => svgHeight * (1 - val / maxY);
   const xAt = (i: number) => {
-    if (data.length === 1) return width / 2;
-    return (
-      paddingX + (i / (data.length - 1)) * (width - paddingX * 2)
-    );
+    if (data.length === 1) return svgWidth / 2;
+    return (i / (data.length - 1)) * svgWidth;
   };
-  const yAt = (val: number) =>
-    chartTop + (1 - val / maxY) * (chartBottom - chartTop);
 
   const usersPoints = data
     .map((d, i) => `${xAt(i).toFixed(1)},${yAt(d.users).toFixed(1)}`)
@@ -158,79 +208,128 @@ function TrafficChart({ data }: { data: Ga4Daily[] }) {
     .map((d, i) => `${xAt(i).toFixed(1)},${yAt(d.sessions).toFixed(1)}`)
     .join(' ');
 
-  const firstLabel = data[0]?.date.slice(5) ?? '';
-  const lastIndex = data.length - 1;
-  const lastLabel = data[lastIndex]?.date.slice(5) ?? '';
-  const midIndex = Math.floor(lastIndex / 2);
-  const midLabel = data[midIndex]?.date.slice(5) ?? '';
+  const xTickIndexes = pickXTickIndexes(data.length);
 
-  const gridYs = [30, 75, 120];
+  const Y_AXIS_WIDTH = 40;
+  const CHART_HEIGHT = 180;
+  const X_AXIS_HEIGHT = 20;
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      width="100%"
-      height={170}
-      preserveAspectRatio="none"
+    <div
       role="img"
       aria-label="Daily visitors and sessions trend"
+      style={{ position: 'relative', paddingLeft: Y_AXIS_WIDTH }}
     >
-      {gridYs.map((y) => (
-        <line
-          key={y}
-          x1={0}
-          y1={y}
-          x2={width}
-          y2={y}
-          stroke={GRID_SOFT}
-          strokeWidth={1}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: Y_AXIS_WIDTH,
+          height: CHART_HEIGHT,
+          pointerEvents: 'none',
+        }}
+      >
+        {yTickValues.map((tick) => {
+          const topPct = (1 - tick / maxY) * 100;
+          return (
+            <div
+              key={tick}
+              style={{
+                position: 'absolute',
+                right: 8,
+                top: `${topPct}%`,
+                transform: 'translateY(-50%)',
+                fontSize: 10,
+                color: INK_MUTED,
+                fontVariantNumeric: 'tabular-nums',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {formatAxisNumber(tick)}
+            </div>
+          );
+        })}
+      </div>
+
+      <svg
+        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+        preserveAspectRatio="none"
+        style={{
+          width: '100%',
+          height: CHART_HEIGHT,
+          display: 'block',
+          overflow: 'visible',
+        }}
+      >
+        {yTickValues.map((tick, i) => {
+          const y = yAt(tick);
+          const isBaseline = i === 0;
+          return (
+            <line
+              key={tick}
+              x1={0}
+              y1={y}
+              x2={svgWidth}
+              y2={y}
+              stroke={isBaseline ? GRID_BASELINE : GRID_SOFT}
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+            />
+          );
+        })}
+        <polyline
+          points={sessionsPoints}
+          fill="none"
+          stroke={DUSTY_ROSE}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
         />
-      ))}
-      <line
-        x1={0}
-        y1={chartBottom + 5}
-        x2={width}
-        y2={chartBottom + 5}
-        stroke={GRID_BASELINE}
-        strokeWidth={1}
-      />
-      <polyline
-        points={sessionsPoints}
-        fill="none"
-        stroke={DUSTY_ROSE}
-        strokeWidth={2}
-        strokeLinejoin="round"
-      />
-      <polyline
-        points={usersPoints}
-        fill="none"
-        stroke={SAGE}
-        strokeWidth={2.5}
-        strokeLinejoin="round"
-      />
-      <text x={0} y={168} fontFamily="Inter" fontSize={10} fill={INK_MUTED}>
-        {firstLabel}
-      </text>
-      <text
-        x={width / 2 - 20}
-        y={168}
-        fontFamily="Inter"
-        fontSize={10}
-        fill={INK_MUTED}
+        <polyline
+          points={usersPoints}
+          fill="none"
+          stroke={SAGE}
+          strokeWidth={2.5}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+
+      <div
+        style={{
+          position: 'relative',
+          height: X_AXIS_HEIGHT,
+          marginTop: 6,
+        }}
       >
-        {midLabel}
-      </text>
-      <text
-        x={width - 40}
-        y={168}
-        fontFamily="Inter"
-        fontSize={10}
-        fill={INK_MUTED}
-        textAnchor="start"
-      >
-        {lastLabel}
-      </text>
-    </svg>
+        {xTickIndexes.map((idx) => {
+          const pct = data.length === 1 ? 50 : (idx / (data.length - 1)) * 100;
+          const anchor =
+            idx === 0
+              ? 'translateX(0)'
+              : idx === data.length - 1
+                ? 'translateX(-100%)'
+                : 'translateX(-50%)';
+          return (
+            <div
+              key={idx}
+              style={{
+                position: 'absolute',
+                left: `${pct}%`,
+                transform: anchor,
+                fontSize: 10,
+                color: INK_MUTED,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {formatAxisDate(data[idx]?.date ?? '')}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -340,9 +439,9 @@ export default function DashboardClient({
   const overviewCards = useMemo(() => {
     const baseline = [
       {
-        label: 'Visitors',
+        label: 'Unique Visitors',
         value: ga4 ? formatInt(ga4.summary.users) : '—',
-        unit: 'unique users',
+        unit: 'distinct people',
       },
       {
         label: 'Page views',
@@ -362,7 +461,7 @@ export default function DashboardClient({
           unit: 'from Google',
         }
       : {
-          label: 'Sessions',
+          label: 'Visitors',
           value: ga4 ? formatInt(ga4.summary.sessions) : '—',
           unit: 'total visits',
         };
@@ -561,7 +660,7 @@ export default function DashboardClient({
                   marginRight: 6,
                 }}
               />
-              Visitors
+              Unique Visitors
             </span>
             <span style={{ color: INK_MUTED }}>
               <span
@@ -574,7 +673,7 @@ export default function DashboardClient({
                   marginRight: 6,
                 }}
               />
-              Sessions
+              Visitors
             </span>
           </div>
         </div>
