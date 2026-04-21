@@ -1,6 +1,7 @@
 :root {
   --cream: #F5F0E6;
   --cream-alt: #EDE6D6;
+  --cream-deep: #E8DFCE;
   --sage: #7A8A6E;
   --sage-dark: #5F6F55;
   --burgundy: #6B2737;
@@ -9,6 +10,8 @@
   --ink: #2A2520;
   --ink-muted: #6B5F50;
   --border: rgba(107, 95, 80, 0.15);
+  --border-soft: rgba(107, 95, 80, 0.08);
+  --rose-line: rgba(193, 154, 139, 0.45);
 
   --font-script: 'Great Vibes', cursive;
   --font-heading: 'Playfair Display', serif;
@@ -22,10 +25,11 @@ body {
 }
 
 body {
-  background: var(--cream);
+  background: var(--cream-deep);
   color: var(--ink);
   font-family: var(--font-body);
   margin: 0;
+  padding: 24px 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -57,49 +61,53 @@ a:hover {
   color: var(--burgundy);
 }
 
-.rw-container {
+.rw-dash {
+  background: var(--cream);
+  padding: 28px 24px;
+  border-radius: 12px;
+  color: var(--ink);
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 32px;
 }
 
 .rw-stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  gap: 12px;
 }
 
 .rw-two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 16px;
 }
 
 .rw-table {
   width: 100%;
   border-collapse: collapse;
-}
-
-.rw-table th,
-.rw-table td {
-  padding: 10px 16px;
-  text-align: left;
+  font-size: 13px;
 }
 
 .rw-table th {
-  font-size: 11px;
-  letter-spacing: 0.1em;
+  text-align: left;
   text-transform: uppercase;
+  letter-spacing: 0.1em;
   color: var(--ink-muted);
+  font-size: 10px;
   font-weight: 500;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
-  padding-top: 12px;
-  padding-bottom: 12px;
 }
 
 .rw-table td {
-  font-size: 14px;
+  padding: 9px 10px;
+  font-size: 13px;
   color: var(--ink);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.rw-table tr:last-child td {
+  border-bottom: none;
 }
 
 .rw-table .rw-num {
@@ -112,9 +120,6 @@ a:hover {
 }
 
 @media (max-width: 768px) {
-  .rw-container {
-    padding: 0 20px;
-  }
   .rw-stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -124,17 +129,10 @@ a:hover {
 }
 
 @media (max-width: 480px) {
-  .rw-hide-sm {
+  .rw-dash {
+    padding: 20px 16px;
+  }
+  .hide-mobile {
     display: none !important;
-  }
-  .rw-table th,
-  .rw-table td {
-    padding: 10px 12px;
-  }
-}
-
-@media (max-width: 420px) {
-  .rw-stats-grid {
-    grid-template-columns: 1fr;
   }
 }

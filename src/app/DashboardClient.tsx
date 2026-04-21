@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import type {
   AnalyticsResponse,
@@ -17,9 +17,15 @@ const PERIODS: { value: Period; label: string }[] = [
 
 const SAGE = '#7A8A6E';
 const DUSTY_ROSE = '#C19A8B';
+const TAN = '#B08968';
 const BURGUNDY = '#6B2737';
 const INK_MUTED = '#6B5F50';
 const BORDER = 'rgba(107, 95, 80, 0.15)';
+const TRACK_BG = 'rgba(107,95,80,0.1)';
+const ROSE_LINE = 'rgba(193, 154, 139, 0.45)';
+const ROSE_LINE_SOFT = 'rgba(193, 154, 139, 0.4)';
+const GRID_SOFT = 'rgba(107,95,80,0.1)';
+const GRID_BASELINE = 'rgba(107,95,80,0.15)';
 
 function formatInt(value: number): string {
   return Math.round(value).toLocaleString('en-GB');
@@ -31,15 +37,6 @@ function formatPct(value: number, digits = 1): string {
 
 function formatPosition(value: number): string {
   return value.toFixed(1);
-}
-
-function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '0s';
-  const total = Math.round(seconds);
-  if (total < 60) return `${total}s`;
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}m ${s.toString().padStart(2, '0')}s`;
 }
 
 function formatUpdatedAt(iso: string): string {
@@ -56,7 +53,7 @@ function formatUpdatedAt(iso: string): string {
   }
 }
 
-function truncatePath(path: string, max = 48): string {
+function truncatePath(path: string, max = 36): string {
   if (path.length <= max) return path;
   return `${path.slice(0, max - 1)}…`;
 }
@@ -65,14 +62,23 @@ const cardStyle: CSSProperties = {
   background: 'var(--cream-alt)',
   border: `1px solid ${BORDER}`,
   borderRadius: 8,
-  padding: 24,
+  padding: 18,
 };
 
 const sectionHeadingStyle: CSSProperties = {
   fontFamily: 'var(--font-heading)',
-  fontSize: 22,
+  fontSize: 16,
   color: 'var(--ink)',
-  margin: '0 0 16px',
+  margin: '0 0 10px',
+  fontWeight: 500,
+};
+
+const labelStyle: CSSProperties = {
+  fontFamily: 'var(--font-body)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.15em',
+  color: INK_MUTED,
+  fontSize: 10,
   fontWeight: 500,
 };
 
@@ -87,35 +93,24 @@ function StatCard({
 }) {
   return (
     <div style={cardStyle}>
-      <div
-        style={{
-          fontSize: 11,
-          letterSpacing: '0.1em',
-          textTransform: 'uppercase',
-          color: INK_MUTED,
-          fontFamily: 'var(--font-body)',
-          marginBottom: 12,
-        }}
-      >
-        {label}
-      </div>
+      <div style={labelStyle}>{label}</div>
       <div
         style={{
           fontFamily: 'var(--font-heading)',
-          fontSize: 40,
+          fontSize: 32,
           color: BURGUNDY,
-          lineHeight: 1,
           fontWeight: 500,
+          lineHeight: 1.1,
+          margin: '6px 0 3px',
         }}
       >
         {value}
       </div>
       <div
         style={{
-          fontSize: 13,
-          color: INK_MUTED,
-          marginTop: 8,
           fontFamily: 'var(--font-body)',
+          color: INK_MUTED,
+          fontSize: 11,
         }}
       >
         {unit}
@@ -125,18 +120,20 @@ function StatCard({
 }
 
 function TrafficChart({ data }: { data: Ga4Daily[] }) {
-  const width = 1000;
-  const height = 260;
-  const padding = { top: 24, right: 16, bottom: 32, left: 48 };
+  const width = 620;
+  const height = 170;
+  const paddingX = 10;
+  const chartTop = 20;
+  const chartBottom = 150;
 
   if (data.length === 0) {
     return (
       <div
         style={{
           color: INK_MUTED,
-          fontSize: 14,
+          fontSize: 13,
           textAlign: 'center',
-          padding: '40px 0',
+          padding: '30px 0',
         }}
       >
         No data for this period yet.
@@ -146,132 +143,143 @@ function TrafficChart({ data }: { data: Ga4Daily[] }) {
 
   const maxY = Math.max(1, ...data.flatMap((d) => [d.users, d.sessions]));
   const xAt = (i: number) => {
-    if (data.length === 1) return padding.left + (width - padding.left - padding.right) / 2;
+    if (data.length === 1) return width / 2;
     return (
-      padding.left +
-      (i / (data.length - 1)) * (width - padding.left - padding.right)
+      paddingX + (i / (data.length - 1)) * (width - paddingX * 2)
     );
   };
   const yAt = (val: number) =>
-    padding.top +
-    (1 - val / maxY) * (height - padding.top - padding.bottom);
+    chartTop + (1 - val / maxY) * (chartBottom - chartTop);
 
-  const usersPath = data
-    .map((d, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(d.users).toFixed(1)}`)
+  const usersPoints = data
+    .map((d, i) => `${xAt(i).toFixed(1)},${yAt(d.users).toFixed(1)}`)
     .join(' ');
-  const sessionsPath = data
-    .map(
-      (d, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(d.sessions).toFixed(1)}`,
-    )
+  const sessionsPoints = data
+    .map((d, i) => `${xAt(i).toFixed(1)},${yAt(d.sessions).toFixed(1)}`)
     .join(' ');
 
-  const tickCount = 4;
-  const yTicks = Array.from({ length: tickCount + 1 }, (_, i) => (maxY / tickCount) * i);
+  const firstLabel = data[0]?.date.slice(5) ?? '';
+  const lastIndex = data.length - 1;
+  const lastLabel = data[lastIndex]?.date.slice(5) ?? '';
+  const midIndex = Math.floor(lastIndex / 2);
+  const midLabel = data[midIndex]?.date.slice(5) ?? '';
 
-  const labelStep = Math.max(1, Math.ceil(data.length / 6));
-  const xLabels = data
-    .map((d, i) => ({ d, i }))
-    .filter(({ i }) => i % labelStep === 0 || i === data.length - 1);
+  const gridYs = [30, 75, 120];
 
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
+      width="100%"
+      height={170}
       preserveAspectRatio="none"
-      style={{ width: '100%', height: 260, display: 'block' }}
       role="img"
       aria-label="Daily visitors and sessions trend"
     >
-      {yTicks.map((t, i) => {
-        const y = yAt(t);
-        return (
-          <g key={i}>
-            <line
-              x1={padding.left}
-              x2={width - padding.right}
-              y1={y}
-              y2={y}
-              stroke={BORDER}
-              strokeWidth={1}
-            />
-            <text
-              x={padding.left - 10}
-              y={y + 4}
-              fontSize={11}
-              fontFamily="var(--font-body)"
-              fill={INK_MUTED}
-              textAnchor="end"
-            >
-              {formatInt(t)}
-            </text>
-          </g>
-        );
-      })}
-      {xLabels.map(({ d, i }) => (
-        <text
-          key={d.date}
-          x={xAt(i)}
-          y={height - padding.bottom + 20}
-          fontSize={11}
-          fontFamily="var(--font-body)"
-          fill={INK_MUTED}
-          textAnchor="middle"
-        >
-          {d.date.slice(5)}
-        </text>
+      {gridYs.map((y) => (
+        <line
+          key={y}
+          x1={0}
+          y1={y}
+          x2={width}
+          y2={y}
+          stroke={GRID_SOFT}
+          strokeWidth={1}
+        />
       ))}
-      <path
-        d={sessionsPath}
+      <line
+        x1={0}
+        y1={chartBottom + 5}
+        x2={width}
+        y2={chartBottom + 5}
+        stroke={GRID_BASELINE}
+        strokeWidth={1}
+      />
+      <polyline
+        points={sessionsPoints}
         fill="none"
         stroke={DUSTY_ROSE}
         strokeWidth={2}
         strokeLinejoin="round"
-        strokeLinecap="round"
       />
-      <path
-        d={usersPath}
+      <polyline
+        points={usersPoints}
         fill="none"
         stroke={SAGE}
         strokeWidth={2.5}
         strokeLinejoin="round"
-        strokeLinecap="round"
       />
+      <text x={0} y={168} fontFamily="Inter" fontSize={10} fill={INK_MUTED}>
+        {firstLabel}
+      </text>
+      <text
+        x={width / 2 - 20}
+        y={168}
+        fontFamily="Inter"
+        fontSize={10}
+        fill={INK_MUTED}
+      >
+        {midLabel}
+      </text>
+      <text
+        x={width - 40}
+        y={168}
+        fontFamily="Inter"
+        fontSize={10}
+        fill={INK_MUTED}
+        textAnchor="start"
+      >
+        {lastLabel}
+      </text>
     </svg>
   );
 }
+
+const DEVICE_COLORS = [SAGE, DUSTY_ROSE, TAN, INK_MUTED];
 
 function DeviceBreakdown({ devices }: { devices: Ga4Device[] }) {
   const total = devices.reduce((sum, d) => sum + d.users, 0);
   if (total === 0) {
     return (
-      <div style={{ color: INK_MUTED, fontSize: 14 }}>No device data yet.</div>
+      <div style={{ color: INK_MUTED, fontSize: 13 }}>
+        No device data yet.
+      </div>
     );
   }
+  const order: string[] = ['mobile', 'desktop', 'tablet'];
+  const sorted = [...devices].sort((a, b) => {
+    const aIdx = order.indexOf(a.device.toLowerCase());
+    const bIdx = order.indexOf(b.device.toLowerCase());
+    const aKey = aIdx === -1 ? order.length : aIdx;
+    const bKey = bIdx === -1 ? order.length : bIdx;
+    return aKey - bKey;
+  });
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {devices.map((d) => {
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {sorted.map((d, i) => {
         const pct = total > 0 ? (d.users / total) * 100 : 0;
         const label = d.device.charAt(0).toUpperCase() + d.device.slice(1);
+        const color = DEVICE_COLORS[i % DEVICE_COLORS.length];
         return (
           <div key={d.device}>
             <div
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: 13,
-                marginBottom: 6,
-                color: 'var(--ink)',
+                fontSize: 12,
+                color: INK_MUTED,
+                marginBottom: 4,
               }}
             >
               <span>{label}</span>
-              <span style={{ color: INK_MUTED, fontVariantNumeric: 'tabular-nums' }}>
-                {formatInt(d.users)} · {formatPct(pct, 0)}
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {formatPct(pct, 0)}
               </span>
             </div>
             <div
               style={{
                 height: 8,
-                background: 'var(--cream)',
-                borderRadius: 999,
+                background: TRACK_BG,
+                borderRadius: 4,
                 overflow: 'hidden',
               }}
             >
@@ -279,8 +287,7 @@ function DeviceBreakdown({ devices }: { devices: Ga4Device[] }) {
                 style={{
                   width: `${Math.max(2, Math.min(100, pct))}%`,
                   height: '100%',
-                  background: SAGE,
-                  borderRadius: 999,
+                  background: color,
                 }}
               />
             </div>
@@ -301,10 +308,6 @@ export default function DashboardClient({
   const [period, setPeriod] = useState<Period>(initialData.period);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (period === initialData.period && data === initialData) return;
-  }, [period, initialData, data]);
 
   async function changePeriod(next: Period) {
     if (next === period && data) return;
@@ -337,24 +340,24 @@ export default function DashboardClient({
   const overviewCards = useMemo(
     () => [
       {
-        label: 'Total visitors',
+        label: 'Visitors',
         value: ga4 ? formatInt(ga4.summary.users) : '—',
-        unit: 'unique people',
+        unit: 'unique users',
       },
       {
         label: 'Page views',
         value: ga4 ? formatInt(ga4.summary.pageViews) : '—',
-        unit: 'pages viewed',
+        unit: 'total views',
       },
       {
         label: 'Engagement',
         value: ga4 ? formatPct(ga4.summary.engagementRate, 0) : '—',
-        unit: 'of visits engaged',
+        unit: 'avg. rate',
       },
       {
         label: 'Search clicks',
         value: gsc ? formatInt(gsc.summary.clicks) : '—',
-        unit: 'via Google',
+        unit: 'from Google',
       },
     ],
     [ga4, gsc],
@@ -365,482 +368,440 @@ export default function DashboardClient({
       {
         label: 'Clicks',
         value: gsc ? formatInt(gsc.summary.clicks) : '—',
-        unit: 'from Google search',
+        unit: 'from search',
       },
       {
         label: 'Impressions',
         value: gsc ? formatInt(gsc.summary.impressions) : '—',
-        unit: 'times shown',
+        unit: 'shown',
       },
       {
-        label: 'Click-through rate',
+        label: 'CTR',
         value: gsc ? formatPct(gsc.summary.ctr, 1) : '—',
-        unit: 'of impressions clicked',
+        unit: 'click rate',
       },
       {
-        label: 'Average position',
+        label: 'Position',
         value: gsc ? formatPosition(gsc.summary.position) : '—',
-        unit: 'in search results',
+        unit: 'avg. ranking',
       },
     ],
     [gsc],
   );
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--cream)' }}>
-      <header style={{ paddingTop: 48, paddingBottom: 28 }}>
-        <div className="rw-container">
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              gap: 16,
-            }}
-          >
-            <div style={{ flex: 1 }}>
-              <h1
-                style={{
-                  fontFamily: 'var(--font-script)',
-                  fontSize: 48,
-                  color: BURGUNDY,
-                  margin: 0,
-                  lineHeight: 1,
-                  fontWeight: 400,
-                }}
-              >
-                Your Dashboard
-              </h1>
-              <p
-                style={{
-                  margin: '14px 0 0',
-                  fontFamily: 'var(--font-body)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.15em',
-                  fontSize: 11,
-                  color: INK_MUTED,
-                }}
-              >
-                The Reconnected Woman
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              style={{
-                fontFamily: 'var(--font-body)',
-                fontSize: 13,
-                color: INK_MUTED,
-                padding: 4,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = BURGUNDY;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = INK_MUTED;
-              }}
-            >
-              Sign out
-            </button>
-          </div>
-          <div
-            style={{
-              height: 1,
-              background: DUSTY_ROSE,
-              opacity: 0.2,
-              marginTop: 20,
-            }}
-          />
+    <div className="rw-dash">
+      <header
+        style={{
+          textAlign: 'center',
+          paddingBottom: 18,
+          borderBottom: `1px solid ${ROSE_LINE_SOFT}`,
+          marginBottom: 22,
+          position: 'relative',
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-script)',
+            fontSize: 50,
+            color: BURGUNDY,
+            lineHeight: 1.1,
+            fontWeight: 400,
+          }}
+        >
+          Your Dashboard
         </div>
+        <div style={{ ...labelStyle, marginTop: 6 }}>
+          The Reconnected Woman
+        </div>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 16,
+            color: INK_MUTED,
+            fontSize: 12,
+            fontFamily: 'var(--font-body)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = BURGUNDY;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = INK_MUTED;
+          }}
+        >
+          Sign out
+        </button>
       </header>
 
-      <div className="rw-container" style={{ paddingBottom: 64 }}>
-        <section
+      <section
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 18,
+          flexWrap: 'wrap',
+          gap: 10,
+        }}
+      >
+        <div style={{ fontSize: 12, color: INK_MUTED }}>
+          Last updated {formatUpdatedAt(data.generatedAt)}
+          {loading ? ' · refreshing…' : ''}
+        </div>
+        <div
+          role="radiogroup"
+          aria-label="Period selector"
+          style={{ display: 'flex', gap: 6 }}
+        >
+          {PERIODS.map((p) => {
+            const active = p.value === period;
+            return (
+              <button
+                key={p.value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => changePeriod(p.value)}
+                disabled={loading}
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 13,
+                  padding: '7px 16px',
+                  borderRadius: 6,
+                  border: `1px solid ${active ? SAGE : 'rgba(107, 95, 80, 0.2)'}`,
+                  background: active ? SAGE : 'var(--cream-alt)',
+                  color: active ? 'var(--cream)' : INK_MUTED,
+                  transition: 'background 160ms ease, color 160ms ease',
+                }}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {fetchError && (
+        <div
+          style={{
+            ...cardStyle,
+            borderColor: DUSTY_ROSE,
+            color: BURGUNDY,
+            fontSize: 13,
+            marginBottom: 18,
+          }}
+        >
+          {fetchError}
+        </div>
+      )}
+
+      {data.ga4Error && !ga4 && (
+        <div
+          style={{
+            ...cardStyle,
+            borderColor: DUSTY_ROSE,
+            color: BURGUNDY,
+            fontSize: 13,
+            marginBottom: 18,
+          }}
+        >
+          Google Analytics isn&apos;t connected yet: {data.ga4Error}
+        </div>
+      )}
+
+      <div className="rw-stats-grid" style={{ marginBottom: 26 }}>
+        {overviewCards.map((card) => (
+          <StatCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            unit={card.unit}
+          />
+        ))}
+      </div>
+
+      <div style={{ ...cardStyle, marginBottom: 26 }}>
+        <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'center',
+            alignItems: 'baseline',
             marginBottom: 12,
             flexWrap: 'wrap',
-            gap: 16,
+            gap: 8,
           }}
         >
           <div
-            style={{
-              fontSize: 13,
-              color: INK_MUTED,
-              fontFamily: 'var(--font-body)',
-            }}
-          >
-            Last updated {formatUpdatedAt(data.generatedAt)}
-            {loading ? ' · refreshing…' : ''}
-          </div>
-          <div
-            role="radiogroup"
-            aria-label="Period selector"
-            style={{ display: 'flex', gap: 8 }}
-          >
-            {PERIODS.map((p) => {
-              const active = p.value === period;
-              return (
-                <button
-                  key={p.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() => changePeriod(p.value)}
-                  disabled={loading}
-                  style={{
-                    padding: '8px 16px',
-                    fontSize: 13,
-                    fontFamily: 'var(--font-body)',
-                    borderRadius: 999,
-                    background: active ? SAGE : 'var(--cream-alt)',
-                    color: active ? 'var(--cream)' : SAGE,
-                    border: `1px solid ${active ? SAGE : BORDER}`,
-                    transition: 'background 160ms ease, color 160ms ease',
-                  }}
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {fetchError && (
-          <div
-            style={{
-              ...cardStyle,
-              borderColor: DUSTY_ROSE,
-              color: BURGUNDY,
-              fontSize: 14,
-              marginBottom: 24,
-            }}
-          >
-            {fetchError}
-          </div>
-        )}
-
-        {data.ga4Error && !ga4 && (
-          <div
-            style={{
-              ...cardStyle,
-              borderColor: DUSTY_ROSE,
-              color: BURGUNDY,
-              fontSize: 14,
-              marginBottom: 24,
-            }}
-          >
-            Google Analytics isn&apos;t connected yet: {data.ga4Error}
-          </div>
-        )}
-
-        <section className="rw-stats-grid" style={{ marginBottom: 24 }}>
-          {overviewCards.map((card) => (
-            <StatCard
-              key={card.label}
-              label={card.label}
-              value={card.value}
-              unit={card.unit}
-            />
-          ))}
-        </section>
-
-        <section style={{ ...cardStyle, marginBottom: 24 }}>
-          <h2 style={sectionHeadingStyle}>Traffic</h2>
-          <p
-            style={{
-              color: INK_MUTED,
-              fontSize: 13,
-              margin: '0 0 18px',
-              fontFamily: 'var(--font-body)',
-            }}
-          >
-            Visitors and sessions, day by day.{' '}
-            <span style={{ color: SAGE }}>●</span> visitors &nbsp;
-            <span style={{ color: DUSTY_ROSE }}>●</span> sessions
-          </p>
-          <TrafficChart data={ga4?.dailyTrend ?? []} />
-        </section>
-
-        <section className="rw-two-col" style={{ marginBottom: 24 }}>
-          <div style={cardStyle}>
-            <h2 style={sectionHeadingStyle}>Top pages</h2>
-            {ga4 && ga4.topPages.length > 0 ? (
-              <table className="rw-table">
-                <thead>
-                  <tr>
-                    <th>Path</th>
-                    <th className="rw-num">Views</th>
-                    <th className="rw-num rw-hide-sm">Visitors</th>
-                    <th className="rw-num rw-hide-sm">Avg. time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ga4.topPages.slice(0, 10).map((page) => (
-                    <tr key={page.path}>
-                      <td title={page.path}>{truncatePath(page.path)}</td>
-                      <td className="rw-num">{formatInt(page.views)}</td>
-                      <td className="rw-num rw-hide-sm">{formatInt(page.users)}</td>
-                      <td className="rw-num rw-hide-sm">
-                        {formatDuration(page.avgSessionSeconds)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div style={{ color: INK_MUTED, fontSize: 14 }}>
-                No pages tracked yet.
-              </div>
-            )}
-          </div>
-          <div style={cardStyle}>
-            <h2 style={sectionHeadingStyle}>Top referrers</h2>
-            {ga4 && (ga4.referrers.length > 0 || ga4.directSessions > 0) ? (
-              <table className="rw-table">
-                <thead>
-                  <tr>
-                    <th>Source</th>
-                    <th className="rw-num">Sessions</th>
-                    <th className="rw-num rw-hide-sm">Visitors</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ga4.directSessions > 0 && (
-                    <tr>
-                      <td
-                        style={{ color: INK_MUTED, fontStyle: 'italic' }}
-                        title="Visitors who came directly (typed the URL, bookmark, etc.)"
-                      >
-                        Direct traffic
-                      </td>
-                      <td className="rw-num">{formatInt(ga4.directSessions)}</td>
-                      <td className="rw-num rw-hide-sm">—</td>
-                    </tr>
-                  )}
-                  {ga4.referrers.slice(0, 10).map((ref) => (
-                    <tr key={ref.source}>
-                      <td>{ref.source}</td>
-                      <td className="rw-num">{formatInt(ref.sessions)}</td>
-                      <td className="rw-num rw-hide-sm">{formatInt(ref.users)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div style={{ color: INK_MUTED, fontSize: 14 }}>
-                No referrers tracked yet.
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="rw-two-col" style={{ marginBottom: 48 }}>
-          <div style={cardStyle}>
-            <h2 style={sectionHeadingStyle}>Top countries</h2>
-            {ga4 && ga4.countries.length > 0 ? (
-              <table className="rw-table">
-                <thead>
-                  <tr>
-                    <th>Country</th>
-                    <th className="rw-num">Visitors</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ga4.countries.slice(0, 10).map((row) => (
-                    <tr key={row.country}>
-                      <td>{row.country}</td>
-                      <td className="rw-num">{formatInt(row.users)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div style={{ color: INK_MUTED, fontSize: 14 }}>
-                No country data yet.
-              </div>
-            )}
-          </div>
-          <div style={cardStyle}>
-            <h2 style={sectionHeadingStyle}>Devices</h2>
-            <DeviceBreakdown devices={ga4?.devices ?? []} />
-          </div>
-        </section>
-
-        <div
-          role="separator"
-          aria-label="Search Performance"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 24,
-            margin: '8px 0 24px',
-          }}
-        >
-          <div
-            style={{
-              flex: 1,
-              height: 1,
-              background: DUSTY_ROSE,
-              opacity: 0.35,
-            }}
-          />
-          <h2
             style={{
               fontFamily: 'var(--font-heading)',
-              fontSize: 32,
-              color: BURGUNDY,
-              margin: 0,
+              fontSize: 16,
+              color: 'var(--ink)',
               fontWeight: 500,
-              letterSpacing: '0.01em',
             }}
           >
-            Search Performance
-          </h2>
-          <div
-            style={{
-              flex: 1,
-              height: 1,
-              background: DUSTY_ROSE,
-              opacity: 0.35,
-            }}
-          />
-        </div>
-
-        {data.gscError && !gsc && (
-          <div
-            style={{
-              ...cardStyle,
-              borderColor: DUSTY_ROSE,
-              color: BURGUNDY,
-              fontSize: 14,
-              marginBottom: 24,
-            }}
-          >
-            Search Console isn&apos;t connected yet: {data.gscError}
+            Traffic over time
           </div>
-        )}
+          <div style={{ display: 'flex', gap: 14, fontSize: 11 }}>
+            <span style={{ color: INK_MUTED }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: 12,
+                  height: 2,
+                  background: SAGE,
+                  verticalAlign: 'middle',
+                  marginRight: 6,
+                }}
+              />
+              Visitors
+            </span>
+            <span style={{ color: INK_MUTED }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: 12,
+                  height: 2,
+                  background: DUSTY_ROSE,
+                  verticalAlign: 'middle',
+                  marginRight: 6,
+                }}
+              />
+              Sessions
+            </span>
+          </div>
+        </div>
+        <TrafficChart data={ga4?.dailyTrend ?? []} />
+      </div>
 
-        <section className="rw-stats-grid" style={{ marginBottom: 24 }}>
-          {gscCards.map((card) => (
-            <StatCard
-              key={card.label}
-              label={card.label}
-              value={card.value}
-              unit={card.unit}
-            />
-          ))}
-        </section>
-
-        <section style={{ ...cardStyle, marginBottom: 24 }}>
-          <h2 style={sectionHeadingStyle}>Top search queries</h2>
-          <p
-            style={{
-              color: INK_MUTED,
-              fontSize: 13,
-              margin: '0 0 16px',
-              fontFamily: 'var(--font-body)',
-            }}
-          >
-            What people typed into Google to find your site.
-          </p>
-          {gsc && gsc.topQueries.length > 0 ? (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="rw-table">
-                <thead>
-                  <tr>
-                    <th>Query</th>
-                    <th className="rw-num">Clicks</th>
-                    <th className="rw-num rw-hide-sm">Impressions</th>
-                    <th className="rw-num">CTR</th>
-                    <th className="rw-num rw-hide-sm">Position</th>
+      <div className="rw-two-col" style={{ marginBottom: 18 }}>
+        <div style={cardStyle}>
+          <div style={sectionHeadingStyle}>Top pages</div>
+          {ga4 && ga4.topPages.length > 0 ? (
+            <table className="rw-table">
+              <thead>
+                <tr>
+                  <th>Page</th>
+                  <th className="rw-num">Views</th>
+                  <th className="rw-num hide-mobile">Users</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ga4.topPages.slice(0, 5).map((page) => (
+                  <tr key={page.path}>
+                    <td title={page.path}>{truncatePath(page.path)}</td>
+                    <td className="rw-num">{formatInt(page.views)}</td>
+                    <td className="rw-num hide-mobile">{formatInt(page.users)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {gsc.topQueries.slice(0, 15).map((row) => (
-                    <tr key={row.query}>
-                      <td>{row.query}</td>
-                      <td className="rw-num">{formatInt(row.clicks)}</td>
-                      <td className="rw-num rw-hide-sm">
-                        {formatInt(row.impressions)}
-                      </td>
-                      <td className="rw-num">{formatPct(row.ctr, 1)}</td>
-                      <td className="rw-num rw-hide-sm">
-                        {formatPosition(row.position)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           ) : (
-            <div style={{ color: INK_MUTED, fontSize: 14 }}>
-              No search queries yet.
+            <div style={{ color: INK_MUTED, fontSize: 13 }}>
+              No pages tracked yet.
             </div>
           )}
-        </section>
-
-        <section style={{ ...cardStyle, marginBottom: 48 }}>
-          <h2 style={sectionHeadingStyle}>Top pages in search</h2>
-          <p
-            style={{
-              color: INK_MUTED,
-              fontSize: 13,
-              margin: '0 0 16px',
-              fontFamily: 'var(--font-body)',
-            }}
-          >
-            Which pages Google sends visitors to.
-          </p>
-          {gsc && gsc.topPages.length > 0 ? (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="rw-table">
-                <thead>
+        </div>
+        <div style={cardStyle}>
+          <div style={sectionHeadingStyle}>Top referrers</div>
+          {ga4 && (ga4.referrers.length > 0 || ga4.directSessions > 0) ? (
+            <table className="rw-table">
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th className="rw-num">Sessions</th>
+                  <th className="rw-num hide-mobile">Users</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ga4.directSessions > 0 && (
                   <tr>
-                    <th>Page</th>
-                    <th className="rw-num">Clicks</th>
-                    <th className="rw-num rw-hide-sm">Impressions</th>
-                    <th className="rw-num">CTR</th>
-                    <th className="rw-num rw-hide-sm">Position</th>
+                    <td>Direct traffic</td>
+                    <td className="rw-num">{formatInt(ga4.directSessions)}</td>
+                    <td className="rw-num hide-mobile">—</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {gsc.topPages.slice(0, 10).map((row) => (
-                    <tr key={row.page}>
-                      <td title={row.page}>{truncatePath(row.page, 56)}</td>
-                      <td className="rw-num">{formatInt(row.clicks)}</td>
-                      <td className="rw-num rw-hide-sm">
-                        {formatInt(row.impressions)}
-                      </td>
-                      <td className="rw-num">{formatPct(row.ctr, 1)}</td>
-                      <td className="rw-num rw-hide-sm">
-                        {formatPosition(row.position)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                )}
+                {ga4.referrers.slice(0, 5).map((ref) => (
+                  <tr key={ref.source}>
+                    <td>{ref.source}</td>
+                    <td className="rw-num">{formatInt(ref.sessions)}</td>
+                    <td className="rw-num hide-mobile">{formatInt(ref.users)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : (
-            <div style={{ color: INK_MUTED, fontSize: 14 }}>
-              No search pages yet.
+            <div style={{ color: INK_MUTED, fontSize: 13 }}>
+              No referrers tracked yet.
             </div>
           )}
-        </section>
+        </div>
+      </div>
 
-        <footer
+      <div className="rw-two-col">
+        <div style={cardStyle}>
+          <div style={sectionHeadingStyle}>Top countries</div>
+          {ga4 && ga4.countries.length > 0 ? (
+            <table className="rw-table">
+              <tbody>
+                {ga4.countries.slice(0, 5).map((row) => (
+                  <tr key={row.country}>
+                    <td>{row.country}</td>
+                    <td className="rw-num">{formatInt(row.users)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div style={{ color: INK_MUTED, fontSize: 13 }}>
+              No country data yet.
+            </div>
+          )}
+        </div>
+        <div style={cardStyle}>
+          <div style={{ ...sectionHeadingStyle, marginBottom: 14 }}>Devices</div>
+          <DeviceBreakdown devices={ga4?.devices ?? []} />
+        </div>
+      </div>
+
+      <div
+        role="separator"
+        aria-label="Search Performance"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          margin: '36px 0 18px',
+        }}
+      >
+        <div style={{ flex: 1, height: 1, background: ROSE_LINE }} />
+        <div
           style={{
-            textAlign: 'center',
-            fontSize: 12,
-            color: INK_MUTED,
-            fontFamily: 'var(--font-body)',
-            paddingTop: 8,
+            fontFamily: 'var(--font-script)',
+            color: BURGUNDY,
+            fontSize: 32,
+            lineHeight: 1,
+            fontWeight: 400,
           }}
         >
-          Made with care for Kelly · {new Date().getFullYear()}
-        </footer>
+          Search Performance
+        </div>
+        <div style={{ flex: 1, height: 1, background: ROSE_LINE }} />
+      </div>
+
+      {data.gscError && !gsc && (
+        <div
+          style={{
+            ...cardStyle,
+            borderColor: DUSTY_ROSE,
+            color: BURGUNDY,
+            fontSize: 13,
+            marginBottom: 18,
+          }}
+        >
+          Search Console isn&apos;t connected yet: {data.gscError}
+        </div>
+      )}
+
+      <div className="rw-stats-grid" style={{ marginBottom: 22 }}>
+        {gscCards.map((card) => (
+          <StatCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            unit={card.unit}
+          />
+        ))}
+      </div>
+
+      <div style={{ ...cardStyle, marginBottom: 16 }}>
+        <div style={sectionHeadingStyle}>Top search queries</div>
+        {gsc && gsc.topQueries.length > 0 ? (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="rw-table">
+              <thead>
+                <tr>
+                  <th>Query</th>
+                  <th className="rw-num">Clicks</th>
+                  <th className="rw-num hide-mobile">Imp.</th>
+                  <th className="rw-num hide-mobile">CTR</th>
+                  <th className="rw-num">Pos.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gsc.topQueries.slice(0, 10).map((row) => (
+                  <tr key={row.query}>
+                    <td>{row.query}</td>
+                    <td className="rw-num">{formatInt(row.clicks)}</td>
+                    <td className="rw-num hide-mobile">
+                      {formatInt(row.impressions)}
+                    </td>
+                    <td className="rw-num hide-mobile">
+                      {formatPct(row.ctr, 1)}
+                    </td>
+                    <td className="rw-num">{formatPosition(row.position)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ color: INK_MUTED, fontSize: 13 }}>
+            No search queries yet.
+          </div>
+        )}
+      </div>
+
+      <div style={cardStyle}>
+        <div style={sectionHeadingStyle}>Top pages in search</div>
+        {gsc && gsc.topPages.length > 0 ? (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="rw-table">
+              <thead>
+                <tr>
+                  <th>Page</th>
+                  <th className="rw-num">Clicks</th>
+                  <th className="rw-num hide-mobile">Imp.</th>
+                  <th className="rw-num hide-mobile">CTR</th>
+                  <th className="rw-num">Pos.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gsc.topPages.slice(0, 8).map((row) => (
+                  <tr key={row.page}>
+                    <td title={row.page}>{truncatePath(row.page, 44)}</td>
+                    <td className="rw-num">{formatInt(row.clicks)}</td>
+                    <td className="rw-num hide-mobile">
+                      {formatInt(row.impressions)}
+                    </td>
+                    <td className="rw-num hide-mobile">
+                      {formatPct(row.ctr, 1)}
+                    </td>
+                    <td className="rw-num">{formatPosition(row.position)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ color: INK_MUTED, fontSize: 13 }}>
+            No search pages yet.
+          </div>
+        )}
+      </div>
+
+      <div
+        style={{
+          textAlign: 'center',
+          color: INK_MUTED,
+          fontSize: 12,
+          paddingTop: 20,
+          marginTop: 28,
+          borderTop: `1px solid ${ROSE_LINE_SOFT}`,
+        }}
+      >
+        Made with care for Kelly · {new Date().getFullYear()}
       </div>
     </div>
   );
