@@ -69,7 +69,9 @@ const sectionHeadingStyle: CSSProperties = {
   fontFamily: 'var(--font-heading)',
   fontSize: 16,
   color: 'var(--ink)',
-  margin: '0 0 10px',
+  margin: '0 0 12px',
+  paddingBottom: 10,
+  borderBottom: '1px solid rgba(193, 154, 139, 0.25)',
   fontWeight: 500,
 };
 
@@ -159,11 +161,12 @@ function formatAxisDate(iso: string): string {
 
 function pickXTickIndexes(length: number): number[] {
   if (length <= 1) return [0];
-  if (length <= 7) return Array.from({ length }, (_, i) => i);
-  const maxTicks = length <= 14 ? Math.min(length, 7) : length <= 35 ? 6 : 7;
-  const step = (length - 1) / (maxTicks - 1);
+  if (length <= 3) return Array.from({ length }, (_, i) => i);
+  const targetCount = length <= 10 ? 4 : length <= 35 ? 4 : 5;
   const set = new Set<number>();
-  for (let i = 0; i < maxTicks; i++) set.add(Math.round(i * step));
+  for (let i = 0; i < targetCount; i++) {
+    set.add(Math.round((i / (targetCount - 1)) * (length - 1)));
+  }
   set.add(0);
   set.add(length - 1);
   return Array.from(set).sort((a, b) => a - b);
@@ -499,10 +502,9 @@ export default function DashboardClient({
       <header
         style={{
           textAlign: 'center',
-          paddingBottom: 18,
+          paddingBottom: 14,
           borderBottom: `1px solid ${ROSE_LINE_SOFT}`,
           marginBottom: 22,
-          position: 'relative',
         }}
       >
         <div
@@ -519,26 +521,32 @@ export default function DashboardClient({
         <div style={{ ...labelStyle, marginTop: 6 }}>
           The Reconnected Woman
         </div>
-        <button
-          type="button"
-          onClick={handleSignOut}
+        <div
           style={{
-            position: 'absolute',
-            right: 0,
-            top: 16,
-            color: INK_MUTED,
-            fontSize: 12,
-            fontFamily: 'var(--font-body)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = BURGUNDY;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = INK_MUTED;
+            display: 'flex',
+            justifyContent: 'flex-end',
+            marginTop: 14,
           }}
         >
-          Sign out
-        </button>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            style={{
+              color: INK_MUTED,
+              fontSize: 12,
+              fontFamily: 'var(--font-body)',
+              padding: '4px 2px',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = BURGUNDY;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = INK_MUTED;
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       <section

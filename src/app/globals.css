@@ -110,6 +110,14 @@ a:hover {
   border-bottom: none;
 }
 
+.rw-table tbody tr {
+  transition: background 160ms ease;
+}
+
+.rw-table tbody tr:hover {
+  background: rgba(193, 154, 139, 0.08);
+}
+
 .rw-table .rw-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
