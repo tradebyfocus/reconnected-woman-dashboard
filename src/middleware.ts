@@ -26,23 +26,32 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/auth/login') ||
     pathname.startsWith('/_next') ||
-    pathname === '/favicon.ico'
+    pathname === '/favicon.ico' ||
+    pathname === '/icon.png' ||
+    pathname === '/apple-icon.png'
   ) {
     return NextResponse.next();
   }
 
   const token = req.cookies.get('rw-auth')?.value;
-  const secret = process.env.DASHBOARD_SESSION_SECRET ?? '';
-  const expected = await computeExpected(secret);
+  const secret = process.env.DASHBOARD_SESSION_SECRET;
 
-  if (!token || token !== expected) {
-    const loginUrl = new URL('/login', req.url);
-    return NextResponse.redirect(loginUrl);
+  if (!token || !secret) {
+    return NextResponse.redirect(new URL('/login', req.url));
+  }
+
+  try {
+    const expected = await computeExpected(secret);
+    if (token !== expected) {
+      return NextResponse.redirect(new URL('/login', req.url));
+    }
+  } catch {
+    return NextResponse.redirect(new URL('/login', req.url));
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png).*)'],
 };
