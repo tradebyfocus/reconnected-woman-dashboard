@@ -821,7 +821,7 @@ export default function DashboardClient({
           borderTop: `1px solid ${ROSE_LINE_SOFT}`,
         }}
       >
-        Made with care for Kelly · {new Date().getFullYear()}
+        Made with Love for Kelly {new Date().getFullYear()}
       </div>
     </div>
   );
