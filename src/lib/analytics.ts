@@ -98,6 +98,105 @@ function settled<T>(result: PromiseSettledResult<T>, fallback: T): T {
   return result.status === 'fulfilled' ? result.value : fallback;
 }
 
+export type PageReferrerRow = {
+  source: string;
+  views: number;
+  users: number;
+};
+
+export type PageReferrersResponse = {
+  path: string;
+  period: Period;
+  total: number;
+  directViews: number;
+  rows: PageReferrerRow[];
+  error: string | null;
+  generatedAt: string;
+};
+
+export async function fetchPageReferrers(
+  path: string,
+  period: Period,
+): Promise<PageReferrersResponse> {
+  const days = periodToDays(period);
+  const today = new Date();
+  const endDate = formatIsoDate(today);
+  const start = new Date(today);
+  start.setUTCDate(start.getUTCDate() - (days - 1));
+  const startDate = formatIsoDate(start);
+
+  const empty = (error: string | null): PageReferrersResponse => ({
+    path,
+    period,
+    total: 0,
+    directViews: 0,
+    rows: [],
+    error,
+    generatedAt: new Date().toISOString(),
+  });
+
+  let ga4PropertyId: string;
+  try {
+    ga4PropertyId = getGa4PropertyId();
+  } catch (err) {
+    return empty(err instanceof Error ? err.message : 'GA4 property id missing');
+  }
+
+  let client: ReturnType<typeof getGa4Client>;
+  try {
+    client = getGa4Client();
+  } catch (err) {
+    return empty(err instanceof Error ? err.message : 'GA4 client init failed');
+  }
+
+  try {
+    const [result] = await client.runReport({
+      property: ga4PropertyId,
+      dateRanges: [{ startDate, endDate }],
+      dimensions: [{ name: 'sessionSource' }],
+      metrics: [{ name: 'screenPageViews' }, { name: 'totalUsers' }],
+      dimensionFilter: {
+        filter: {
+          fieldName: 'pagePath',
+          stringFilter: { value: path, matchType: 'EXACT' },
+        },
+      },
+      limit: 25,
+      orderBys: [
+        { metric: { metricName: 'screenPageViews' }, desc: true },
+      ],
+    });
+
+    const raw = result.rows ?? [];
+    let directViews = 0;
+    let total = 0;
+    const rows: PageReferrerRow[] = [];
+    raw.forEach((row) => {
+      const source = row.dimensionValues?.[0]?.value ?? '';
+      const views = num(row.metricValues?.[0]?.value);
+      const users = num(row.metricValues?.[1]?.value);
+      total += views;
+      if (source === '(direct)' || source === 'direct') {
+        directViews += views;
+        return;
+      }
+      rows.push({ source, views, users });
+    });
+
+    return {
+      path,
+      period,
+      total,
+      directViews,
+      rows,
+      error: null,
+      generatedAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    return empty(err instanceof Error ? err.message : 'GA4 fetch failed');
+  }
+}
+
 export async function fetchAnalytics(period: Period): Promise<AnalyticsResponse> {
   const days = periodToDays(period);
   const today = new Date();

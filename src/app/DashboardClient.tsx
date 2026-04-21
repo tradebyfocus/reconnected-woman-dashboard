@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import type {
   AnalyticsResponse,
   Ga4Daily,
   Ga4Device,
+  PageReferrersResponse,
   Period,
 } from '@/lib/analytics';
 
@@ -56,6 +57,11 @@ function formatUpdatedAt(iso: string): string {
 function truncatePath(path: string, max = 36): string {
   if (path.length <= max) return path;
   return `${path.slice(0, max - 1)}…`;
+}
+
+function displayPagePath(path: string): string {
+  if (path === '/' || path === '') return 'Home';
+  return path;
 }
 
 const cardStyle: CSSProperties = {
@@ -410,6 +416,61 @@ export default function DashboardClient({
   const [period, setPeriod] = useState<Period>(initialData.period);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [openPath, setOpenPath] = useState<string | null>(null);
+  const [pageReferrers, setPageReferrers] =
+    useState<PageReferrersResponse | null>(null);
+  const [referrersLoading, setReferrersLoading] = useState(false);
+  const [referrersError, setReferrersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (openPath === null) return;
+    let cancelled = false;
+    setReferrersLoading(true);
+    setReferrersError(null);
+    setPageReferrers(null);
+    fetch(
+      `/api/analytics/page-referrers?path=${encodeURIComponent(openPath)}&period=${period}`,
+      { cache: 'no-store' },
+    )
+      .then(async (res) => {
+        const json = (await res.json()) as PageReferrersResponse;
+        if (cancelled) return;
+        if (!res.ok) {
+          setReferrersError(
+            (json as unknown as { error?: string }).error ??
+              'Could not load the breakdown.',
+          );
+        } else {
+          setPageReferrers(json);
+          if (json.error) setReferrersError(json.error);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setReferrersError("Couldn't load the breakdown. Try again.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReferrersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [openPath, period]);
+
+  useEffect(() => {
+    if (openPath === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenPath(null);
+    };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [openPath]);
 
   async function changePeriod(next: Period) {
     if (next === period && data) return;
@@ -692,7 +753,7 @@ export default function DashboardClient({
         <div style={cardStyle}>
           <div style={sectionHeadingStyle}>Top pages</div>
           {ga4 && ga4.topPages.length > 0 ? (
-            <table className="rw-table">
+            <table className="rw-table rw-table-clickable">
               <thead>
                 <tr>
                   <th>Page</th>
@@ -702,8 +763,22 @@ export default function DashboardClient({
               </thead>
               <tbody>
                 {ga4.topPages.slice(0, 5).map((page) => (
-                  <tr key={page.path}>
-                    <td title={page.path}>{truncatePath(page.path)}</td>
+                  <tr
+                    key={page.path}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setOpenPath(page.path)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setOpenPath(page.path);
+                      }
+                    }}
+                    aria-label={`See referrers for ${displayPagePath(page.path)}`}
+                  >
+                    <td title={page.path}>
+                      {truncatePath(displayPagePath(page.path))}
+                    </td>
                     <td className="rw-num">{formatInt(page.views)}</td>
                     <td className="rw-num hide-mobile">{formatInt(page.users)}</td>
                   </tr>
@@ -715,6 +790,16 @@ export default function DashboardClient({
               No pages tracked yet.
             </div>
           )}
+          <div
+            style={{
+              marginTop: 10,
+              fontSize: 11,
+              color: INK_MUTED,
+              fontStyle: 'italic',
+            }}
+          >
+            Tap a row to see where its visitors came from.
+          </div>
         </div>
         <div style={cardStyle}>
           <div style={sectionHeadingStyle}>Top referrers</div>
@@ -929,6 +1014,247 @@ export default function DashboardClient({
         }}
       >
         Made with Love for Kelly {new Date().getFullYear()}
+      </div>
+
+      {openPath !== null && (
+        <PageReferrersModal
+          path={openPath}
+          data={pageReferrers}
+          loading={referrersLoading}
+          error={referrersError}
+          onClose={() => setOpenPath(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function PageReferrersModal({
+  path,
+  data,
+  loading,
+  error,
+  onClose,
+}: {
+  path: string;
+  data: PageReferrersResponse | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  const title = displayPagePath(path);
+  const hasRows = Boolean(data && (data.rows.length > 0 || data.directViews > 0));
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rw-page-modal-title"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(42, 37, 32, 0.45)',
+        zIndex: 100,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+        animation: 'rw-fade-in 160ms ease',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--cream)',
+          border: `1px solid ${BORDER}`,
+          borderRadius: 12,
+          maxWidth: 520,
+          width: '100%',
+          maxHeight: 'calc(100vh - 40px)',
+          overflowY: 'auto',
+          padding: '24px 24px 20px',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 16,
+            marginBottom: 8,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                ...labelStyle,
+                marginBottom: 4,
+              }}
+            >
+              Where they came from
+            </div>
+            <h2
+              id="rw-page-modal-title"
+              style={{
+                fontFamily: 'var(--font-heading)',
+                fontSize: 22,
+                color: BURGUNDY,
+                margin: 0,
+                fontWeight: 500,
+                overflowWrap: 'break-word',
+              }}
+            >
+              {title}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              color: INK_MUTED,
+              fontSize: 20,
+              lineHeight: 1,
+              padding: 4,
+              marginTop: -2,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = BURGUNDY;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = INK_MUTED;
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div
+          style={{
+            height: 1,
+            background: ROSE_LINE,
+            opacity: 0.4,
+            margin: '12px 0 16px',
+          }}
+        />
+
+        {loading && (
+          <div style={{ color: INK_MUTED, fontSize: 13, padding: '12px 0' }}>
+            Loading…
+          </div>
+        )}
+
+        {!loading && error && (
+          <div
+            style={{
+              color: BURGUNDY,
+              fontSize: 13,
+              padding: '12px 0',
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && data && (
+          <>
+            <div
+              style={{
+                display: 'flex',
+                gap: 16,
+                marginBottom: 16,
+                flexWrap: 'wrap',
+              }}
+            >
+              <ModalStat label="Total views" value={formatInt(data.total)} />
+              {data.directViews > 0 && (
+                <ModalStat
+                  label="Direct"
+                  value={formatInt(data.directViews)}
+                />
+              )}
+              <ModalStat
+                label="Sources"
+                value={formatInt(
+                  data.rows.length + (data.directViews > 0 ? 1 : 0),
+                )}
+              />
+            </div>
+
+            {hasRows ? (
+              <table className="rw-table">
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    <th className="rw-num">Views</th>
+                    <th className="rw-num">Visitors</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.directViews > 0 && (
+                    <tr>
+                      <td
+                        style={{
+                          fontStyle: 'italic',
+                          color: INK_MUTED,
+                        }}
+                      >
+                        Direct traffic
+                      </td>
+                      <td className="rw-num">
+                        {formatInt(data.directViews)}
+                      </td>
+                      <td className="rw-num">—</td>
+                    </tr>
+                  )}
+                  {data.rows.map((row) => (
+                    <tr key={row.source}>
+                      <td>{row.source}</td>
+                      <td className="rw-num">{formatInt(row.views)}</td>
+                      <td className="rw-num">{formatInt(row.users)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div
+                style={{
+                  color: INK_MUTED,
+                  fontSize: 13,
+                  padding: '12px 0',
+                }}
+              >
+                No referrer data for this page yet.
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ModalStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        background: 'var(--cream-alt)',
+        border: `1px solid ${BORDER}`,
+        borderRadius: 8,
+        padding: '10px 14px',
+        minWidth: 96,
+      }}
+    >
+      <div style={{ ...labelStyle, marginBottom: 4 }}>{label}</div>
+      <div
+        style={{
+          fontFamily: 'var(--font-heading)',
+          fontSize: 20,
+          color: BURGUNDY,
+          fontWeight: 500,
+          lineHeight: 1,
+        }}
+      >
+        {value}
       </div>
     </div>
   );
