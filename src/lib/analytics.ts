@@ -126,14 +126,18 @@ export async function fetchAnalytics(period: Period): Promise<AnalyticsResponse>
   }
 
   let gscSiteUrl: string | null = null;
-  try {
-    gscSiteUrl = getGscSiteUrl();
-  } catch (err) {
-    gscError = err instanceof Error ? err.message : 'GSC site url missing';
+  const rawGscSite = process.env.GSC_SITE_URL;
+  const gscConfigured = Boolean(rawGscSite && rawGscSite.trim().length > 0);
+  if (gscConfigured) {
+    try {
+      gscSiteUrl = getGscSiteUrl();
+    } catch (err) {
+      gscError = err instanceof Error ? err.message : 'GSC site url missing';
+    }
   }
 
   let gsc: ReturnType<typeof getGscClient> | null = null;
-  if (gscSiteUrl) {
+  if (gscConfigured && gscSiteUrl) {
     try {
       gsc = getGscClient();
     } catch (err) {

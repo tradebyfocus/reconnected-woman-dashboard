@@ -337,8 +337,8 @@ export default function DashboardClient({
   const ga4 = data.ga4;
   const gsc = data.gsc;
 
-  const overviewCards = useMemo(
-    () => [
+  const overviewCards = useMemo(() => {
+    const baseline = [
       {
         label: 'Visitors',
         value: ga4 ? formatInt(ga4.summary.users) : '—',
@@ -354,14 +354,20 @@ export default function DashboardClient({
         value: ga4 ? formatPct(ga4.summary.engagementRate, 0) : '—',
         unit: 'avg. rate',
       },
-      {
-        label: 'Search clicks',
-        value: gsc ? formatInt(gsc.summary.clicks) : '—',
-        unit: 'from Google',
-      },
-    ],
-    [ga4, gsc],
-  );
+    ];
+    const fourth = gsc
+      ? {
+          label: 'Search clicks',
+          value: formatInt(gsc.summary.clicks),
+          unit: 'from Google',
+        }
+      : {
+          label: 'Sessions',
+          value: ga4 ? formatInt(ga4.summary.sessions) : '—',
+          unit: 'total visits',
+        };
+    return [...baseline, fourth];
+  }, [ga4, gsc]);
 
   const gscCards = useMemo(
     () => [
@@ -665,131 +671,145 @@ export default function DashboardClient({
         </div>
       </div>
 
-      <div
-        role="separator"
-        aria-label="Search Performance"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          margin: '36px 0 18px',
-        }}
-      >
-        <div style={{ flex: 1, height: 1, background: ROSE_LINE }} />
-        <div
-          style={{
-            fontFamily: 'var(--font-script)',
-            color: BURGUNDY,
-            fontSize: 32,
-            lineHeight: 1,
-            fontWeight: 400,
-          }}
-        >
-          Search Performance
-        </div>
-        <div style={{ flex: 1, height: 1, background: ROSE_LINE }} />
-      </div>
+      {(gsc || data.gscError) && (
+        <>
+          <div
+            role="separator"
+            aria-label="Search Performance"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
+              margin: '36px 0 18px',
+            }}
+          >
+            <div style={{ flex: 1, height: 1, background: ROSE_LINE }} />
+            <div
+              style={{
+                fontFamily: 'var(--font-script)',
+                color: BURGUNDY,
+                fontSize: 32,
+                lineHeight: 1,
+                fontWeight: 400,
+              }}
+            >
+              Search Performance
+            </div>
+            <div style={{ flex: 1, height: 1, background: ROSE_LINE }} />
+          </div>
 
-      {data.gscError && !gsc && (
-        <div
-          style={{
-            ...cardStyle,
-            borderColor: DUSTY_ROSE,
-            color: BURGUNDY,
-            fontSize: 13,
-            marginBottom: 18,
-          }}
-        >
-          Search Console isn&apos;t connected yet: {data.gscError}
-        </div>
+          {data.gscError && !gsc && (
+            <div
+              style={{
+                ...cardStyle,
+                borderColor: DUSTY_ROSE,
+                color: BURGUNDY,
+                fontSize: 13,
+                marginBottom: 18,
+              }}
+            >
+              Search Console isn&apos;t connected yet: {data.gscError}
+            </div>
+          )}
+
+          {gsc && (
+            <>
+              <div className="rw-stats-grid" style={{ marginBottom: 22 }}>
+                {gscCards.map((card) => (
+                  <StatCard
+                    key={card.label}
+                    label={card.label}
+                    value={card.value}
+                    unit={card.unit}
+                  />
+                ))}
+              </div>
+
+              <div style={{ ...cardStyle, marginBottom: 16 }}>
+                <div style={sectionHeadingStyle}>Top search queries</div>
+                {gsc.topQueries.length > 0 ? (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="rw-table">
+                      <thead>
+                        <tr>
+                          <th>Query</th>
+                          <th className="rw-num">Clicks</th>
+                          <th className="rw-num hide-mobile">Imp.</th>
+                          <th className="rw-num hide-mobile">CTR</th>
+                          <th className="rw-num">Pos.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gsc.topQueries.slice(0, 10).map((row) => (
+                          <tr key={row.query}>
+                            <td>{row.query}</td>
+                            <td className="rw-num">{formatInt(row.clicks)}</td>
+                            <td className="rw-num hide-mobile">
+                              {formatInt(row.impressions)}
+                            </td>
+                            <td className="rw-num hide-mobile">
+                              {formatPct(row.ctr, 1)}
+                            </td>
+                            <td className="rw-num">
+                              {formatPosition(row.position)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div style={{ color: INK_MUTED, fontSize: 13 }}>
+                    No search queries yet.
+                  </div>
+                )}
+              </div>
+
+              <div style={cardStyle}>
+                <div style={sectionHeadingStyle}>Top pages in search</div>
+                {gsc.topPages.length > 0 ? (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="rw-table">
+                      <thead>
+                        <tr>
+                          <th>Page</th>
+                          <th className="rw-num">Clicks</th>
+                          <th className="rw-num hide-mobile">Imp.</th>
+                          <th className="rw-num hide-mobile">CTR</th>
+                          <th className="rw-num">Pos.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gsc.topPages.slice(0, 8).map((row) => (
+                          <tr key={row.page}>
+                            <td title={row.page}>
+                              {truncatePath(row.page, 44)}
+                            </td>
+                            <td className="rw-num">{formatInt(row.clicks)}</td>
+                            <td className="rw-num hide-mobile">
+                              {formatInt(row.impressions)}
+                            </td>
+                            <td className="rw-num hide-mobile">
+                              {formatPct(row.ctr, 1)}
+                            </td>
+                            <td className="rw-num">
+                              {formatPosition(row.position)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div style={{ color: INK_MUTED, fontSize: 13 }}>
+                    No search pages yet.
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </>
       )}
-
-      <div className="rw-stats-grid" style={{ marginBottom: 22 }}>
-        {gscCards.map((card) => (
-          <StatCard
-            key={card.label}
-            label={card.label}
-            value={card.value}
-            unit={card.unit}
-          />
-        ))}
-      </div>
-
-      <div style={{ ...cardStyle, marginBottom: 16 }}>
-        <div style={sectionHeadingStyle}>Top search queries</div>
-        {gsc && gsc.topQueries.length > 0 ? (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="rw-table">
-              <thead>
-                <tr>
-                  <th>Query</th>
-                  <th className="rw-num">Clicks</th>
-                  <th className="rw-num hide-mobile">Imp.</th>
-                  <th className="rw-num hide-mobile">CTR</th>
-                  <th className="rw-num">Pos.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gsc.topQueries.slice(0, 10).map((row) => (
-                  <tr key={row.query}>
-                    <td>{row.query}</td>
-                    <td className="rw-num">{formatInt(row.clicks)}</td>
-                    <td className="rw-num hide-mobile">
-                      {formatInt(row.impressions)}
-                    </td>
-                    <td className="rw-num hide-mobile">
-                      {formatPct(row.ctr, 1)}
-                    </td>
-                    <td className="rw-num">{formatPosition(row.position)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div style={{ color: INK_MUTED, fontSize: 13 }}>
-            No search queries yet.
-          </div>
-        )}
-      </div>
-
-      <div style={cardStyle}>
-        <div style={sectionHeadingStyle}>Top pages in search</div>
-        {gsc && gsc.topPages.length > 0 ? (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="rw-table">
-              <thead>
-                <tr>
-                  <th>Page</th>
-                  <th className="rw-num">Clicks</th>
-                  <th className="rw-num hide-mobile">Imp.</th>
-                  <th className="rw-num hide-mobile">CTR</th>
-                  <th className="rw-num">Pos.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gsc.topPages.slice(0, 8).map((row) => (
-                  <tr key={row.page}>
-                    <td title={row.page}>{truncatePath(row.page, 44)}</td>
-                    <td className="rw-num">{formatInt(row.clicks)}</td>
-                    <td className="rw-num hide-mobile">
-                      {formatInt(row.impressions)}
-                    </td>
-                    <td className="rw-num hide-mobile">
-                      {formatPct(row.ctr, 1)}
-                    </td>
-                    <td className="rw-num">{formatPosition(row.position)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div style={{ color: INK_MUTED, fontSize: 13 }}>
-            No search pages yet.
-          </div>
-        )}
-      </div>
 
       <div
         style={{
